@@ -1,0 +1,141 @@
+
+--Covid 19 Data Exploration
+
+--Skills used: Joins, CTE's, Temp Tables, Windows Functions, Aggregate Functions, Creating ciews, Converting Data types
+
+Select *
+from [portfolio project]..CovidDeaths
+where continent is not null
+order by 3,4
+
+
+--Select Data that we are going to be starting with
+
+Select Location, Date, total_cases, new_cases,total_deaths, population 
+from [portfolio project]..CovidDeaths
+where continent is not null
+order by 1,2
+
+
+--Total cases vs Total Deaths
+--Shows likelihood of dying if you dying if you contact covid in France
+
+Select Location, Date, total_cases, total_deaths, (total_deaths/total_cases)*100 as Death_percentage 
+from [portfolio project]..CovidDeaths
+where location like '%France%'
+and continent is not null
+order by 1,2
+
+
+--Total cases vs Population
+--Shows what oercentage of population infected with covid
+
+Select Location, Date, population, total_cases, (total_cases/population)*100 as Infected_population_percentage
+from [portfolio project]..CovidDeaths
+order by 1,2
+
+
+--Countries with highest infection rate compared to population
+
+Select Location, population, DATE, MAX(total_cases) as Highest_Infection_count, MAX((total_cases/population))*100 as Infected_population_percentage
+from [portfolio project]..CovidDeaths
+group by Location, population, date
+order by Infected_population_percentage desc
+
+
+--Countries with highest death count per population
+
+Select Location, MAX(Cast (total_deaths as int)) as Total_death_count
+from [portfolio project]..CovidDeaths
+where continent is not null
+and location not in ('world', 'Europian union', 'International')
+group by Location
+order by Total_death_count desc
+
+
+--Breaking things down by continent
+--Showing continents with highest death count per population
+
+Select continent, MAX(Cast (total_deaths as int)) as Total_death_count
+from [portfolio project]..CovidDeaths
+where continent is not null
+group by continent
+order by Total_death_count desc
+
+
+--Global numbers
+
+Select  Date, total_cases, total_deaths, (total_deaths/total_cases)*100 as Death_percentage 
+from [portfolio project]..CovidDeaths
+where continent is not null
+order by 1,2
+
+
+--Total Population vs Vaccinations
+--Shows percentage of population that has recieved atleast one covid vaccine
+
+Select  sum(new_cases) as total_cases, SUM(cast(new_deaths as int)) as toatl_deaths,SUM(cast(new_deaths as int))/SUM(new_cases)*100 as death_percentage
+from [portfolio project]..CovidDeaths
+where continent is not null
+--group by date
+order by 1,2
+
+
+--Using CTE to perfrom calculation on partition by in previous query
+
+with PopvsVac (continent, location, date, population, new_vaccination, rollingpeoplevaccinated) as
+(
+select dea.continent,dea.location,dea.date, dea.population,vac.new_vaccinations 
+, sum (convert (int, vac.new_vaccinations)) OVER (partition by dea.location order by dea.location, dea.date) as rollingpeoplevaccinated
+--(rollingpeoplevaccinated/population)*100
+from [portfolio project]..CovidDeaths dea
+join [portfolio project]..Covidvaccination vac
+on dea.location = vac.location
+and dea.date = vac.date
+where dea.continent is not null
+--order by 2,3
+)
+select*, (rollingpeoplevaccinated/population)*100
+from PopvsVac
+
+
+--Using Temp Table to perfrom calculation on partition by in previous query
+
+drop table if exists #percentpopulationvaccinated
+create table #percentpopulationvaccinated
+(
+continent nvarchar(255),
+location nvarchar(255),
+Date datetime,
+population numeric,
+new_vaccination numeric,
+rollingpeoplevaccinated numeric
+)
+
+insert into #percentpopulationvaccinated
+select dea.continent,dea.location,dea.date, dea.population,vac.new_vaccinations 
+, sum (convert (int, vac.new_vaccinations)) OVER (partition by dea.location order by dea.location, dea.date) as rollingpeoplevaccinated
+--(rollingpeoplevaccinated/population)*100
+from [portfolio project]..CovidDeaths dea
+join [portfolio project]..Covidvaccination vac
+on dea.location = vac.location
+and dea.date = vac.date
+where dea.continent is not null
+--order by 2,3
+
+select*, (rollingpeoplevaccinated/population)*100
+from #percentpopulationvaccinated
+
+
+--creating ciew to store data for later visualization
+
+create view percentpopulationvaccinated as 
+select dea.continent,dea.location,dea.date, dea.population,vac.new_vaccinations 
+, sum (convert (int, vac.new_vaccinations)) OVER (partition by dea.location order by dea.location, dea.date) as rollingpeoplevaccinated
+--(rollingpeoplevaccinated/population)*100
+from [portfolio project]..CovidDeaths dea
+join [portfolio project]..Covidvaccination vac
+on dea.location = vac.location
+and dea.date = vac.date
+where dea.continent is not null
+--order by 2,3
